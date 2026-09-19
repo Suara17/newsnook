@@ -34,7 +34,9 @@ export function assertOpenAiEndpointAndKey(config: CloudTranslationConfig): stri
   } catch {
     throw new Error('API 地址格式不正确')
   }
-  if (parsed.protocol !== 'https:') throw new Error('为保护 API Key，API 地址必须使用 HTTPS')
+  if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') {
+    throw new Error('API 地址必须以 http:// 或 https:// 开头')
+  }
   return base
 }
 

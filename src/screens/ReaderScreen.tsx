@@ -60,6 +60,7 @@ import type { Article } from '../lib/types'
 import type { TypographyPrefs } from '../sources/preferences'
 import { resolveAiFeatureConfig } from '../features/translation/aiConfig'
 import { createTranslationService } from '../features/translation/service'
+import { WordLookupPopup } from '../components/WordLookupPopup'
 import {
   translationDisplayModeLabel,
   translationLanguageLabel,
@@ -141,6 +142,10 @@ export function ReaderScreen({
   const mediaPlayablesRef = useRef(mediaPlayables)
   mediaPlayablesRef.current = mediaPlayables
   const [deferredPhases, setDeferredPhases] = useState<Record<string, DeferredHostPhase>>({})
+  const [lookupWord, setLookupWord] = useState<{
+    word: string
+    position: { x: number; y: number }
+  } | null>(null)
   const [lightbox, setLightbox] = useState<{ src: string; alt: string } | null>(null)
   const [commentsOpen, setCommentsOpen] = useState(false)
   const [commentCount, setCommentCount] = useState<number | undefined>()
@@ -502,6 +507,38 @@ export function ReaderScreen({
   useEffect(() => {
     return () => {
       for (const value of Object.values(mediaPlayablesRef.current)) revokeBlobUrl(value)
+    }
+  }, [])
+
+  useEffect(() => {
+    const handleSelectionChange = () => {
+      const selection = window.getSelection()
+      if (!selection || selection.isCollapsed) return
+      const text = selection.toString().trim()
+      // 如果选中的是 1-50 个字符以内的词或短语
+      if (text.length > 0 && text.length <= 50 && /[\p{L}\p{N}]/u.test(text)) {
+        try {
+          const range = selection.getRangeAt(0)
+          const rect = range.getBoundingClientRect()
+          if (rect.width > 0 || rect.height > 0) {
+            setLookupWord({
+              word: text,
+              position: {
+                x: rect.left + rect.width / 2,
+                y: rect.top,
+              },
+            })
+          }
+        } catch {
+          // ignore
+        }
+      }
+    }
+
+    // 监听 selectionchange 事件
+    document.addEventListener('selectionchange', handleSelectionChange)
+    return () => {
+      document.removeEventListener('selectionchange', handleSelectionChange)
     }
   }, [])
 
@@ -1822,6 +1859,15 @@ export function ReaderScreen({
         onClose={() => setCommentsOpen(false)}
         article={commentsArticle}
       />
+      {lookupWord && (
+        <WordLookupPopup
+          word={lookupWord.word}
+          position={lookupWord.position}
+          translationService={translationService}
+          translationPrefs={translationPrefs}
+          onClose={() => setLookupWord(null)}
+        />
+      )}
 
       <AiSpeedReadPanel
         open={speedReadOpen}
