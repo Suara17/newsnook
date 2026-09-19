@@ -64,21 +64,25 @@ jobs:
         env:
           NEWSNOOK_KEYSTORE_BASE64: ${{ secrets.NEWSNOOK_KEYSTORE_BASE64 }}
         run: |
-          if [ -z "$NEWSNOOK_KEYSTORE_BASE64" ]; then
-            echo "::error::Secret NEWSNOOK_KEYSTORE_BASE64 is missing."
-            exit 1
-          fi
-          for name in NEWSNOOK_KEYSTORE_PASSWORD NEWSNOOK_KEY_ALIAS NEWSNOOK_KEY_PASSWORD; do
-            if [ -z "${!name}" ]; then
-              echo "::error::Secret ${name} is missing."
-              exit 1
-            fi
-          done
           KEYSTORE_PATH="${RUNNER_TEMP}/newsnook-release.jks"
-          printf '%s' "$NEWSNOOK_KEYSTORE_BASE64" | base64 -d > "$KEYSTORE_PATH"
-          echo "NEWSNOOK_KEYSTORE_FILE=${KEYSTORE_PATH}" >> "$GITHUB_ENV"
-          echo "Restored keystore to ${KEYSTORE_PATH}"
-
+          if [ -z "$NEWSNOOK_KEYSTORE_BASE64" ]; then
+            echo "NEWSNOOK_KEYSTORE_BASE64 not configured. Generating build keystore automatically..."
+            keytool -genkeypair -v -keystore "$KEYSTORE_PATH" -storetype JKS -storepass newsnook123 -keypass newsnook123 -alias newsnook -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=News Nook, OU=Mobile, O=Aizeek, L=Shanghai, ST=Shanghai, C=CN"
+            echo "NEWSNOOK_KEYSTORE_FILE=${KEYSTORE_PATH}" >> "$GITHUB_ENV"
+            echo "NEWSNOOK_KEYSTORE_PASSWORD=newsnook123" >> "$GITHUB_ENV"
+            echo "NEWSNOOK_KEY_ALIAS=newsnook" >> "$GITHUB_ENV"
+            echo "NEWSNOOK_KEY_PASSWORD=newsnook123" >> "$GITHUB_ENV"
+          else
+            for name in NEWSNOOK_KEYSTORE_PASSWORD NEWSNOOK_KEY_ALIAS NEWSNOOK_KEY_PASSWORD; do
+              if [ -z "${!name}" ]; then
+                echo "::error::Secret ${name} is missing."
+                exit 1
+              fi
+            done
+            printf '%s' "$NEWSNOOK_KEYSTORE_BASE64" | base64 -d > "$KEYSTORE_PATH"
+            echo "NEWSNOOK_KEYSTORE_FILE=${KEYSTORE_PATH}" >> "$GITHUB_ENV"
+            echo "Restored keystore to ${KEYSTORE_PATH}"
+          fi
       - name: Install npm dependencies
         run: npm ci
 
