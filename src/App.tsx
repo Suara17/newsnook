@@ -1025,6 +1025,43 @@ export default function App() {
     notifyCacheChange()
   }, [notifyCacheChange])
 
+  const handleToggleFavorite = useCallback((article: Article) => {
+    const exists = favoritesRef.current.some((item) => item.id === article.id)
+    const next = exists
+      ? favoritesRef.current.filter((item) => item.id !== article.id)
+      : [article, ...favoritesRef.current]
+    favoritesRef.current = next
+    setFavorites(next)
+    saveFavoriteArticles(next)
+    if (exists) {
+      if (!laterRef.current.some((item) => item.id === article.id)) {
+        setBodyPinned(article.id, false)
+      }
+    } else {
+      setBodyPinned(article.id, true)
+      prefetchBody({
+        article,
+        shouldPin: () =>
+          laterRef.current.some((item) => item.id === article.id) ||
+          favoritesRef.current.some((item) => item.id === article.id),
+        onCacheChange: notifyCacheChange,
+        extraSources: prefs.customSources,
+      })
+    }
+    notifyCacheChange()
+  }, [notifyCacheChange, prefs.customSources])
+
+  const handleRemoveFavorite = useCallback((id: string) => {
+    const next = favoritesRef.current.filter((item) => item.id !== id)
+    favoritesRef.current = next
+    setFavorites(next)
+    saveFavoriteArticles(next)
+    if (!laterRef.current.some((item) => item.id === id)) {
+      setBodyPinned(id, false)
+    }
+    notifyCacheChange()
+  }, [notifyCacheChange])
+
   const toggleSource = useCallback((id: string) => {
     setEnabledIds((prev) =>
       prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id],

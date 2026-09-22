@@ -63,6 +63,22 @@ export class TranslationService {
     this.provider = provider
   }
 
+  async translateText(
+    text: string,
+    prefs: Pick<TranslationPrefs, 'sourceLanguage' | 'targetLanguage'>,
+    options?: { signal?: AbortSignal },
+  ): Promise<string> {
+    const trimmed = text.trim()
+    if (!trimmed) return ''
+    const results = await this.provider.translate({
+      texts: [trimmed],
+      sourceLanguage: prefs.sourceLanguage,
+      targetLanguage: prefs.targetLanguage,
+      signal: options?.signal,
+    })
+    return finalizeTranslatedText(results[0] || '', prefs.targetLanguage)
+  }
+
   async translateArticle(
     title: string,
     html: string,

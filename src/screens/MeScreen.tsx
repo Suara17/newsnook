@@ -104,6 +104,7 @@ function SettingsRow({ icon: Icon, title, caption, badge, onClick, dataTour }: S
 
 export function MeScreen({
   later,
+  favorites = [],
   history,
   readCount,
   customSourcesSummary,
