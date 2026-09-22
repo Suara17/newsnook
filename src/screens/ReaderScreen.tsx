@@ -1,7 +1,8 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState, type MutableRefObject, type RefObject } from 'react'
 import { Browser } from '@capacitor/browser'
 import { Capacitor } from '@capacitor/core'
-import { ArrowLeft, BookmarkCheck, BookmarkPlus, Globe, Languages, LoaderCircle, MessageSquare, MoreHorizontal, RefreshCw, ScrollText, Volume2, X } from 'lucide-react'
+import { ArrowLeft, BookmarkCheck, BookmarkPlus, Globe, Heart, Languages, LoaderCircle, MessageSquare, MoreHorizontal, RefreshCw, ScrollText, Volume2, X } from 'lucide-react'
+import { WordLookupPopup } from '../components/WordLookupPopup'
 
 import { AiSpeedReadPanel } from '../components/AiSpeedReadPanel'
 import { ImageLightbox } from '../components/ImageLightbox'
@@ -101,6 +102,8 @@ interface Props {
   onOpenRelated?: (article: Article) => void
   /** Android：仅 Wi-Fi 自动加载阅读页媒体 */
   wifiOnlyAutoLoadMedia?: boolean
+  favorited?: boolean
+  onToggleFavorite?: (article: Article) => void
 }
 
 type LoadState = 'loading' | 'ready' | 'error'
@@ -121,6 +124,8 @@ export function ReaderScreen({
   onOpenSettings,
   onOpenRelated,
   wifiOnlyAutoLoadMedia = false,
+  favorited = false,
+  onToggleFavorite,
 }: Props) {
   const reduced = useReducedMotion()
   const { connectionType } = useNetworkStatus()
@@ -152,6 +157,10 @@ export function ReaderScreen({
   const mediaPlayablesRef = useRef(mediaPlayables)
   mediaPlayablesRef.current = mediaPlayables
   const [deferredPhases, setDeferredPhases] = useState<Record<string, DeferredHostPhase>>({})
+  const [lookupWord, setLookupWord] = useState<{
+    word: string
+    position: { x: number; y: number }
+  } | null>(null)
   const [lightbox, setLightbox] = useState<{ src: string; alt: string } | null>(null)
   const [commentsOpen, setCommentsOpen] = useState(false)
   const [commentCount, setCommentCount] = useState<number | undefined>()
@@ -1374,6 +1383,24 @@ export function ReaderScreen({
                         : '朗读'}
                 </span>
               </button>
+              {onToggleFavorite && (
+                <button
+                  type="button"
+                  onClick={() => onToggleFavorite(laterArticle)}
+                  aria-pressed={favorited}
+                  aria-label={favorited ? '移出我的收藏' : '加入我的收藏'}
+                  className="flex h-9 items-center gap-1 px-1 transition-colors duration-200"
+                >
+                  <Heart
+                    size={14}
+                    strokeWidth={1.7}
+                    className={favorited ? 'fill-cinnabar text-cinnabar' : 'text-paper-muted'}
+                  />
+                  <span className={`hidden font-mono text-[10px] tracking-[0.08em] min-[390px]:inline ${favorited ? 'text-cinnabar-soft' : 'text-paper-muted'}`}>
+                    {favorited ? '已收藏' : '收藏'}
+                  </span>
+                </button>
+              )}
               <button
                 type="button"
                 onClick={() => onToggleLater(laterArticle)}
@@ -1920,6 +1947,16 @@ export function ReaderScreen({
         onClose={() => setCommentsOpen(false)}
         article={commentsArticle}
       />
+
+      {lookupWord && (
+        <WordLookupPopup
+          word={lookupWord.word}
+          position={lookupWord.position}
+          translationService={translationService}
+          translationPrefs={translationPrefs}
+          onClose={() => setLookupWord(null)}
+        />
+      )}
 
       <AiSpeedReadPanel
         open={speedReadOpen}

@@ -1,6 +1,8 @@
 import { memo } from 'react'
 import {
   Bookmark,
+  Heart,
+  Sparkles,
   History,
   Info,
   Moon,
@@ -27,6 +29,7 @@ interface Props {
   activeTab: TabKey
   settingsRouteName: string | null
   laterCount: number
+  favoritesCount?: number
   historyCount: number
   theme: ThemeMode
   resolvedTheme: 'light' | 'dark'
@@ -44,6 +47,8 @@ interface Props {
   }
   onNavigateHome: () => void
   onNavigateLater: () => void
+  onNavigateFavorites?: () => void
+  onNavigateAiRecommend?: () => void
   onNavigateHistory: () => void
   onNavigateSettings: () => void
   onNavigateAbout: () => void
@@ -57,6 +62,7 @@ export const DesktopSidebar = memo(function DesktopSidebar({
   activeTab,
   settingsRouteName,
   laterCount,
+  favoritesCount = 0,
   historyCount,
   resolvedTheme,
   onToggleTheme,
@@ -64,6 +70,8 @@ export const DesktopSidebar = memo(function DesktopSidebar({
   presetSwitcher,
   onNavigateHome,
   onNavigateLater,
+  onNavigateFavorites,
+  onNavigateAiRecommend,
   onNavigateHistory,
   onNavigateSettings,
   onNavigateAbout,
@@ -71,6 +79,8 @@ export const DesktopSidebar = memo(function DesktopSidebar({
 }: Props) {
   const isHomeActive = activeTab === 'today' && !settingsRouteName
   const isLaterActive = settingsRouteName === 'later'
+  const isFavoritesActive = settingsRouteName === 'favorites'
+  const isAiRecommendActive = settingsRouteName === 'ai-recommend'
   const isHistoryActive = settingsRouteName === 'history'
   const isAboutBranch =
     settingsRouteName === 'about' ||
@@ -172,6 +182,55 @@ export const DesktopSidebar = memo(function DesktopSidebar({
               </li>
             )}
 
+            {onNavigateAiRecommend && (
+              <li>
+                <button
+                  type="button"
+                  onClick={onNavigateAiRecommend}
+                  className={`group flex w-full items-center justify-between rounded-xl px-3 py-2 text-left transition-all duration-200 ${
+                    isAiRecommendActive
+                      ? 'bg-ink-raised text-paper font-medium shadow-xs border border-haze'
+                      : 'text-paper-muted hover:bg-ink-raised/50 hover:text-paper'
+                  }`}
+                >
+                  <div className="flex items-center gap-2.5 min-w-0">
+                    <Sparkles
+                      size={16}
+                      strokeWidth={isAiRecommendActive ? 2 : 1.6}
+                      className={isAiRecommendActive ? 'text-amber-500' : 'text-paper-faint group-hover:text-amber-500'}
+                    />
+                    <span className="text-[13.5px] tracking-wide">AI 智能荐读</span>
+                  </div>
+                </button>
+              </li>
+            )}
+            {onNavigateFavorites && (
+              <li>
+                <button
+                  type="button"
+                  onClick={onNavigateFavorites}
+                  className={`group flex w-full items-center justify-between rounded-xl px-3 py-2 text-left transition-all duration-200 ${
+                    isFavoritesActive
+                      ? 'bg-ink-raised text-paper font-medium shadow-xs border border-haze'
+                      : 'text-paper-muted hover:bg-ink-raised/50 hover:text-paper'
+                  }`}
+                >
+                  <div className="flex items-center gap-2.5 min-w-0">
+                    <Heart
+                      size={16}
+                      strokeWidth={isFavoritesActive ? 2 : 1.6}
+                      className={isFavoritesActive ? 'text-cinnabar' : 'text-paper-faint group-hover:text-paper-muted'}
+                    />
+                    <span className="text-[13.5px] tracking-wide">我的收藏</span>
+                  </div>
+                  {favoritesCount > 0 && (
+                    <span className="flex h-4.5 min-w-4.5 items-center justify-center rounded-full bg-cinnabar px-1.5 font-mono text-[9.5px] font-semibold text-white">
+                      {favoritesCount > 99 ? '99+' : favoritesCount}
+                    </span>
+                  )}
+                </button>
+              </li>
+            )}
             <li>
               <button
                 type="button"

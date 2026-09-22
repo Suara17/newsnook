@@ -57,6 +57,8 @@ import {
   loadEnabledSources,
   loadIdSet,
   loadLaterArticles,
+  loadFavoriteArticles,
+  saveFavoriteArticles,
   markSchemeOnboardingSeen,
   markSyncOnboardingSeen,
   saveEnabledSources,
@@ -83,6 +85,8 @@ import { CategoryEditScreen } from './screens/settings/CategoryEditScreen'
 import { CustomSourcesScreen } from './screens/settings/CustomSourcesScreen'
 import { HistoryScreen } from './screens/settings/HistoryScreen'
 import { LaterScreen } from './screens/settings/LaterScreen'
+import { FavoritesScreen } from './screens/settings/FavoritesScreen'
+import { AiRecommendScreen } from './screens/settings/AiRecommendScreen'
 import { LocalSearchScreen } from './screens/settings/LocalSearchScreen'
 import { PresetListScreen } from './screens/settings/PresetListScreen'
 import { StorageScreen } from './screens/settings/StorageScreen'
@@ -211,6 +215,8 @@ type SettingsRoute =
   | { name: 'ai'; returnTo?: 'translation' | 'read-aloud' }
   | { name: 'proxy' }
   | { name: 'later' }
+  | { name: 'favorites' }
+  | { name: 'ai-recommend' }
   | { name: 'history' }
   | { name: 'local-search' }
   | { name: 'account-sync' }
@@ -385,6 +391,7 @@ export default function App() {
   /** 墨水屏中区进设置时暂存文章，从「我的」返回时恢复阅读 */
   const [readerReturnArticle, setReaderReturnArticle] = useState<Article | null>(null)
   const [readerReturnSiteId, setReaderReturnSiteId] = useState<SiteId | null>(null)
+  const [readerReturnSettingsRoute, setReaderReturnSettingsRoute] = useState<SettingsRoute | null>(null)
   const readerOverlayCloserRef = useRef<(() => boolean) | null>(null)
   const [eggOpen, setEggOpen] = useState(false)
   const openEgg = useCallback(() => setEggOpen(true), [])
@@ -418,8 +425,11 @@ export default function App() {
     startProductTourNow()
   }, [startProductTourNow])
   const [later, setLater] = useState<Article[]>(() => loadLaterArticles())
+  const [favorites, setFavorites] = useState<Article[]>(() => loadFavoriteArticles())
   const [readIds, setReadIds] = useState<Set<string>>(() => loadIdSet('read'))
   const laterRef = useRef(later)
+  const favoritesRef = useRef(favorites)
+  favoritesRef.current = favorites
   /** 推荐排序经 ref 读取已读集合：打开文章返回时不重排，避免列表跳动 */
   const readIdsRef = useRef(readIds)
   readIdsRef.current = readIds
@@ -569,7 +579,11 @@ export default function App() {
     setReading(null)
     clearShareLocation()
     recoverAppScrollAfterNavigation()
-  }, [])
+    if (readerReturnSettingsRoute) {
+      setSettingsRoute(readerReturnSettingsRoute)
+      setReaderReturnSettingsRoute(null)
+    }
+  }, [readerReturnSettingsRoute])
 
   const dismissDeepLinkError = useCallback(() => {
     setDeepLinkError(false)
@@ -841,20 +855,38 @@ export default function App() {
 
   useEffect(() => {
     laterRef.current = later
-    const pinnedIds = new Set(later.map((item) => item.id))
+    favoritesRef.current = favorites
+    const pinnedIds = new Set([
+      ...later.map((item) => item.id),
+      ...favorites.map((item) => item.id),
+    ])
     syncBodyPins(pinnedIds)
 
     later.forEach((article) => {
       if (article.contentType === 'video' || hasCachedBody(article.id)) return
       prefetchBody({
         article,
-        shouldPin: () => laterRef.current.some((item) => item.id === article.id),
+        shouldPin: () =>
+          laterRef.current.some((item) => item.id === article.id) ||
+          favoritesRef.current.some((item) => item.id === article.id),
+        onCacheChange: notifyCacheChange,
+        extraSources: prefs.customSources,
+      })
+    })
+
+    favorites.forEach((article) => {
+      if (article.contentType === 'video' || hasCachedBody(article.id)) return
+      prefetchBody({
+        article,
+        shouldPin: () =>
+          laterRef.current.some((item) => item.id === article.id) ||
+          favoritesRef.current.some((item) => item.id === article.id),
         onCacheChange: notifyCacheChange,
         extraSources: prefs.customSources,
       })
     })
     notifyCacheChange()
-  }, [later, notifyCacheChange, prefs.customSources])
+  }, [later, favorites, notifyCacheChange, prefs.customSources])
 
   const openArticle = useCallback((article: Article) => {
     setReaderReturnArticle(null)
@@ -1378,11 +1410,48 @@ export default function App() {
       )
     }
 
+    if (settingsRoute.name === 'ai-recommend') {
+      return (
+        <AiRecommendScreen
+          articles={availableArticles}
+          categories={categories}
+          currentCategoryId={categoryId}
+          favorites={favorites}
+          prefs={prefs}
+          onOpenArticle={(article) => {
+            setReaderReturnSettingsRoute({ name: 'ai-recommend' })
+            setSettingsRoute(null)
+            openArticle(article)
+          }}
+          onBack={() => setSettingsRoute(null)}
+        />
+      )
+    }
+
+    if (settingsRoute.name === 'favorites') {
+      return (
+        <FavoritesScreen
+          favorites={favorites}
+          onOpen={(article) => {
+            setReaderReturnSettingsRoute({ name: 'favorites' })
+            setSettingsRoute(null)
+            openArticle(article)
+          }}
+          onRemoveFavorite={handleRemoveFavorite}
+          onBack={() => setSettingsRoute(null)}
+        />
+      )
+    }
+
     if (settingsRoute.name === 'later') {
       return (
         <LaterScreen
           later={later}
-          onOpen={openArticle}
+          onOpen={(article) => {
+            setReaderReturnSettingsRoute({ name: 'later' })
+            setSettingsRoute(null)
+            openArticle(article)
+          }}
           onRemoveLater={removeLater}
           onBack={() => setSettingsRoute(null)}
         />
@@ -1393,7 +1462,11 @@ export default function App() {
       return (
         <HistoryScreen
           history={cachedHistory}
-          onOpen={openArticle}
+          onOpen={(article) => {
+            setReaderReturnSettingsRoute({ name: 'history' })
+            setSettingsRoute(null)
+            openArticle(article)
+          }}
           onBack={() => setSettingsRoute(null)}
         />
       )
@@ -1532,6 +1605,7 @@ export default function App() {
       return (
         <MeScreen
           later={later}
+          favorites={favorites}
           history={cachedHistory}
           readCount={readIds.size}
           customSourcesSummary={customSourcesSummary}
@@ -1553,6 +1627,8 @@ export default function App() {
           availableVersion={appUpdate.availableVersion}
           onBackToReading={readerReturnArticle ? restoreReaderFromSettings : undefined}
           onOpenLater={() => setSettingsRoute({ name: 'later' })}
+          onOpenFavorites={() => setSettingsRoute({ name: 'favorites' })}
+          onOpenAiRecommend={() => setSettingsRoute({ name: 'ai-recommend' })}
           onOpenHistory={() => setSettingsRoute({ name: 'history' })}
           onOpenLocalSearch={() => setSettingsRoute({ name: 'local-search' })}
           onOpenCustomSources={() => setSettingsRoute({ name: 'custom-sources' })}

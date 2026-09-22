@@ -17,6 +17,8 @@ import {
   Search,
   Type,
   Volume2,
+  Sparkles,
+  Heart,
 } from 'lucide-react'
 
 import { useReducedMotion } from '../hooks/useReducedMotion'
@@ -25,6 +27,7 @@ import type { Article } from '../lib/types'
 
 interface Props {
   later: Article[]
+  favorites?: Article[]
   history: Article[]
   readCount: number
   customSourcesSummary?: string
@@ -41,6 +44,8 @@ interface Props {
   hasUpdate?: boolean
   availableVersion?: string
   onOpenLater: () => void
+  onOpenFavorites?: () => void
+  onOpenAiRecommend?: () => void
   onOpenHistory: () => void
   onOpenLocalSearch: () => void
   onOpenCustomSources: () => void
@@ -115,6 +120,8 @@ export function MeScreen({
   hasUpdate,
   availableVersion,
   onOpenLater,
+  onOpenFavorites,
+  onOpenAiRecommend,
   onOpenHistory,
   onOpenLocalSearch,
   onOpenCustomSources,
@@ -177,6 +184,23 @@ export function MeScreen({
           data-tour="me-reading"
           className="divide-y divide-haze border-y border-haze md:grid md:grid-cols-2 md:gap-px md:divide-y-0 md:bg-haze"
         >
+          {onOpenAiRecommend && (
+            <SettingsRow
+              icon={Sparkles}
+              title="AI 智能荐读"
+              caption="根据偏好与当前分类为您挑选精读文章"
+              onClick={onOpenAiRecommend}
+            />
+          )}
+          {onOpenFavorites && (
+            <SettingsRow
+              icon={Heart}
+              title="收藏夹"
+              caption={favorites && favorites.length ? `${favorites.length} 篇收藏` : '阅读器顶栏可收藏'}
+              badge={favorites && favorites.length > 0 ? favorites.length : null}
+              onClick={onOpenFavorites}
+            />
+          )}
           <SettingsRow
             icon={Bookmark}
             title="稍后读"

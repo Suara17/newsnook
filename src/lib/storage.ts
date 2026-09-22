@@ -470,6 +470,20 @@ export function saveLaterArticles(items: Article[]): void {
   })
 }
 
+export function loadFavoriteArticles(): Article[] {
+  const stored = read<Article[]>('favorite-articles', [])
+  const items = stored.map(compactCachedArticle)
+  if (stored.some((item) => Boolean(item.contentHtml))) write('favorite-articles', items)
+  return items
+}
+
+export function saveFavoriteArticles(items: Article[]): void {
+  const compactItems = items.slice(0, 200).map(compactCachedArticle)
+  scheduleTask(() => {
+    write('favorite-articles', compactItems)
+  })
+}
+
 export function clearListCache(): void {
   removeKeys(listKeys(LIST_CACHE_PREFIX))
 }
