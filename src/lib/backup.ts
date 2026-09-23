@@ -19,6 +19,7 @@ import {
   loadEnabledSources,
   loadIdSet,
   loadLaterArticles,
+  loadFavoriteArticles,
   loadPreferences,
   loadPresetsState,
   loadReadingPositions,
@@ -40,6 +41,7 @@ export type BackupSection =
   | 'presets'
   | 'enabledSources'
   | 'laterItems'
+  | 'favoriteArticles'
   | 'readIds'
   | 'readingPositions'
 
@@ -48,6 +50,7 @@ export const BACKUP_SECTIONS: BackupSection[] = [
   'presets',
   'enabledSources',
   'laterItems',
+  'favoriteArticles',
   'readIds',
   'readingPositions',
 ]
@@ -57,6 +60,7 @@ export const BACKUP_SECTION_LABELS: Record<BackupSection, string> = {
   presets: '场景预设',
   enabledSources: '启用信源',
   laterItems: '稍后读',
+  favoriteArticles: '我的收藏',
   readIds: '已读标记',
   readingPositions: '阅读位置',
 }
@@ -67,6 +71,7 @@ export interface BackupData {
   presets?: unknown
   enabledSources?: string[]
   laterItems?: Article[]
+  favoriteArticles?: Article[]
   readIds?: string[]
   readingPositions?: unknown
 }
@@ -206,6 +211,9 @@ export function parseBackup(text: string): BackupPayload {
   const laterItems = articleArray(source.laterItems)
   if (laterItems.length) data.laterItems = laterItems
 
+  const favoriteArticles = articleArray(source.favoriteArticles)
+  if (favoriteArticles.length) data.favoriteArticles = favoriteArticles
+
   const readIds = stringArray(source.readIds)
   if (readIds.length) data.readIds = readIds
 
@@ -241,6 +249,7 @@ export function summarizeBackup(payload: BackupPayload): BackupSummary {
       presets: data.presets != null,
       enabledSources: Boolean(data.enabledSources?.length),
       laterItems: Boolean(data.laterItems?.length),
+      favoriteArticles: Boolean(data.favoriteArticles?.length),
       readIds: Boolean(data.readIds?.length),
       readingPositions: Object.keys(positions).length > 0,
     },
@@ -249,6 +258,7 @@ export function summarizeBackup(payload: BackupPayload): BackupSummary {
     presetCount: presets?.userPresets.length ?? 0,
     enabledSourceCount: data.enabledSources?.length ?? 0,
     laterCount: data.laterItems?.length ?? 0,
+    favoriteCount: data.favoriteArticles?.length ?? 0,
     readCount: data.readIds?.length ?? 0,
     readingPositionCount: Object.keys(positions).length,
   }
@@ -289,6 +299,7 @@ export async function restoreBackup(
   push('presets', data.presets != null ? normalizePresetsState(data.presets) : null)
   push('enabledSources', data.enabledSources?.length ? data.enabledSources : null)
   push('laterItems', data.laterItems?.length ? data.laterItems : null)
+  push('favoriteArticles', data.favoriteArticles?.length ? data.favoriteArticles : null)
   push('readIds', data.readIds?.length ? data.readIds : null)
 
   const positions = normalizeReadingPositions(data.readingPositions)

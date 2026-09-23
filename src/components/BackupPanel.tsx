@@ -33,6 +33,8 @@ function sectionDetail(section: BackupSection, summary: BackupSummary): string {
       return `${summary.enabledSourceCount} 个已启用信源`
     case 'laterItems':
       return `${summary.laterCount} 篇稍后读（正文需联网重新下载）`
+    case 'favoriteArticles':
+      return `${summary.favoriteCount} 篇我的收藏（正文需联网重新下载）`
     case 'readIds':
       return `${summary.readCount} 条已读标记`
     case 'readingPositions':
@@ -177,7 +179,7 @@ export function BackupPanel() {
       </div>
 
       <SettingsHint>
-        备份包含偏好、场景预设、自建订阅与分类、启用信源、稍后读、已读标记与阅读位置，只落本机文件，不会上传。
+        备份包含偏好（含 AI 翻译/总结配置）、场景预设、自建订阅与分类、启用信源、我的收藏、稍后读、已读标记与阅读位置，只落本机文件，不会上传。
         正文与列表缓存可再生，不进备份。只想迁移订阅源时用「自定义订阅」里的 OPML 更通用。
       </SettingsHint>
 
