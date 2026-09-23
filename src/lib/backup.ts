@@ -96,6 +96,7 @@ export interface BackupSummary {
   presetCount: number
   enabledSourceCount: number
   laterCount: number
+  favoriteCount: number
   readCount: number
   readingPositionCount: number
 }
@@ -105,6 +106,7 @@ const STORAGE_KEY_BY_SECTION: Record<BackupSection, string> = {
   presets: 'presets',
   enabledSources: 'enabled',
   laterItems: 'later-items',
+  favoriteArticles: 'favorite-articles',
   readIds: 'read',
   readingPositions: READING_POSITION_KEY,
 }
@@ -140,6 +142,7 @@ export function collectBackup(appVersion?: string): BackupPayload {
   const presets = loadPresetsState()
   const enabled = loadEnabledSources()
   const laterItems = loadLaterArticles()
+  const favoriteArticles = loadFavoriteArticles()
   const readIds = [...loadIdSet('read')]
   const readingPositions = normalizeReadingPositions(loadReadingPositions())
 
@@ -148,6 +151,7 @@ export function collectBackup(appVersion?: string): BackupPayload {
   if (presets != null) data.presets = presets
   if (enabled?.length) data.enabledSources = enabled
   if (laterItems.length) data.laterItems = laterItems.map(compactArticle)
+  if (favoriteArticles.length) data.favoriteArticles = favoriteArticles.map(compactArticle)
   if (readIds.length) data.readIds = readIds
   if (Object.keys(readingPositions).length) data.readingPositions = readingPositions
 
