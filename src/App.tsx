@@ -1893,8 +1893,10 @@ export default function App() {
           <ReaderScreen
             article={reading}
             saved={laterIds.has(reading.id)}
+            favorited={favorites.some((item) => item.id === reading.id)}
             onClose={closeReader}
             onToggleLater={toggleLater}
+            onToggleFavorite={handleToggleFavorite}
             onCacheChange={notifyCacheChange}
             overlayCloserRef={readerOverlayCloserRef}
             translationPrefs={prefs.translation}
