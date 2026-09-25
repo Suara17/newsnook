@@ -51,7 +51,7 @@ export function normalizeReadAloudPrefs(value: unknown): ReadAloudPrefs {
   const normalizedVoice = text(ai.voice)
   return {
     engine:
-      input.engine === 'system' || input.engine === 'ai' || input.engine === 'auto'
+      input.engine === 'system' || input.engine === 'edge' || input.engine === 'ai' || input.engine === 'auto'
         ? input.engine
         : DEFAULT_READ_ALOUD_PREFS.engine,
     rate: number(input.rate, DEFAULT_READ_ALOUD_PREFS.rate, 0.5, 2.5),
@@ -80,6 +80,7 @@ export function normalizeReadAloudPrefs(value: unknown): ReadAloudPrefs {
 }
 
 export function readAloudEngineLabel(engine: ReadAloudPrefs['engine']): string {
+  if (engine === 'edge') return '微软 Edge 神经语音'
   if (engine === 'system') return '系统语音'
   if (engine === 'ai') return 'AI 高品质语音'
   return '自动'

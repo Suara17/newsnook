@@ -5,6 +5,7 @@ import type { AiPrefs } from '../../translation/types'
 import type { ReadAloudPrefs, ReadAloudProvider } from '../types'
 import { AiTtsProvider } from './aiTts'
 import { AndroidSystemTtsProvider } from './androidSystem'
+import { EdgeTtsProvider } from './edgeTts'
 import { WebSpeechProvider } from './webSpeech'
 
 export interface ReadAloudProviderContext {
@@ -35,6 +36,9 @@ export function readAloudProviderKey({
   prefs,
   ai,
 }: ReadAloudProviderContext): string {
+  if (prefs.engine === 'edge') {
+    return `edge|${prefs.systemVoiceId || 'default'}|${prefs.rate}|${prefs.pitch}`
+  }
   if (prefs.engine === 'ai') {
     const provider = resolveTtsProvider(ai, prefs.ai.providerId)
     return [
@@ -58,6 +62,14 @@ export async function createReadAloudProvider({
   prefs,
   ai,
 }: ReadAloudProviderContext): Promise<ReadAloudProvider> {
+  if (prefs.engine === 'edge') {
+    const provider = new EdgeTtsProvider()
+    if (!(await provider.isAvailable())) {
+      throw new Error('Edge TTS 朗读服务不可用。')
+    }
+    return provider
+  }
+
   if (prefs.engine === 'ai') {
     const provider = resolveTtsProvider(ai, prefs.ai.providerId)
     const result = new AiTtsProvider(provider, {

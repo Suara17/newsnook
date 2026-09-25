@@ -1,6 +1,6 @@
-export type ReadAloudEngine = 'auto' | 'system' | 'ai'
+export type ReadAloudEngine = 'auto' | 'system' | 'edge' | 'ai'
 
-export type ReadAloudProviderId = 'android-system' | 'web-speech' | 'ai'
+export type ReadAloudProviderId = 'android-system' | 'web-speech' | 'edge' | 'ai'
 
 export type ReadAloudState =
   | 'idle'

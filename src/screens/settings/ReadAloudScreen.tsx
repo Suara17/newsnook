@@ -5,6 +5,7 @@ import {
   ChevronDown,
   LoaderCircle,
   ServerCog,
+  Sparkles,
   Volume2,
 } from 'lucide-react'
 
@@ -23,6 +24,7 @@ import {
   DEFAULT_READ_ALOUD_PREFS,
   readAloudEngineLabel,
 } from '../../features/readAloud/config'
+import { EDGE_TTS_VOICES, DEFAULT_EDGE_VOICE_ID } from '../../features/readAloud/providers/edgeTts'
 import { getReadAloudService } from '../../features/readAloud/service'
 import type {
   ReadAloudAudioFormat,
@@ -50,6 +52,7 @@ const FORMATS: ReadAloudAudioFormat[] = [
 
 type PickerKind =
   | 'system-voice'
+  | 'edge-voice'
   | 'provider'
   | 'protocol'
   | 'format'
@@ -229,8 +232,21 @@ export function ReadAloudScreen({
     [],
   )
 
+  const edgeVoiceOptions = useMemo<OptionPickerItem[]>(
+    () =>
+      EDGE_TTS_VOICES.map((v) => ({
+        id: v.id,
+        label: v.name,
+        description: v.id,
+      })),
+    [],
+  )
+  const selectedEdgeVoice =
+    edgeVoiceOptions.find((option) => option.id === (prefs.systemVoiceId || DEFAULT_EDGE_VOICE_ID)) ??
+    edgeVoiceOptions[0]
+
   useEffect(() => {
-    if (prefs.engine === 'ai') return
+    if (prefs.engine !== 'system' && prefs.engine !== 'auto') return
     let alive = true
     setVoiceState('loading')
     setVoiceMessage('')
@@ -263,12 +279,13 @@ export function ReadAloudScreen({
     <>
       <SettingsShell title="朗读" caption={caption} onBack={onBack}>
         <SettingsSection title="朗读引擎">
-          <div className="page-x grid gap-2 sm:grid-cols-3">
+          <div className="page-x grid gap-2 grid-cols-2 sm:grid-cols-4">
             {(
               [
-                ['auto', '自动', '按平台选择系统语音'],
+                ['edge', '微软 Edge 神经', '高自然度 · 免 Key 推荐'],
                 ['system', '系统语音', '免费 · 优先本地'],
-                ['ai', 'AI 高品质语音', 'BYOK · 需要联网'],
+                ['ai', 'AI 语音', '自定义 API Key'],
+                ['auto', '自动系统', '按平台选择'],
               ] as const
             ).map(([id, title, description]) => (
               <button
@@ -377,7 +394,24 @@ export function ReadAloudScreen({
           </div>
         </SettingsSection>
 
-        {prefs.engine !== 'ai' && (
+        {prefs.engine === 'edge' && (
+          <SettingsSection title="微软神经语音">
+            <div className="page-x border-y border-haze bg-ink py-4">
+              <PickerField
+                label="声音音色"
+                value={selectedEdgeVoice?.label ?? '晓晓 (温暖亲切)'}
+                caption={selectedEdgeVoice?.description}
+                onClick={() => setPicker('edge-voice')}
+              />
+              <p className="mt-3 flex items-start gap-2 font-mono text-[9.5px] leading-relaxed text-paper-faint">
+                <Sparkles size={13} className="mt-0.5 shrink-0 text-cinnabar-soft" />
+                微软 Edge 高自然度神经音色，完全免费无需 API Key，朗读感情丰富、断句自然。
+              </p>
+            </div>
+          </SettingsSection>
+        )}
+
+        {(prefs.engine === 'system' || prefs.engine === 'auto') && (
           <SettingsSection title="系统语音">
             <div className="page-x border-y border-haze bg-ink py-4">
               <PickerField
@@ -474,6 +508,20 @@ export function ReadAloudScreen({
           Android 后台朗读使用原生前台媒体服务，系统 TTS 与 AI TTS 都由原生播放器托管，支持熄屏、通知栏、锁屏和蓝牙媒体键；Web 端使用 Web Speech / HTML Audio 与浏览器 Media Session，后台能力取决于浏览器和操作系统。
         </SettingsHint>
       </SettingsShell>
+
+      <OptionPickerDialog
+        open={picker === 'edge-voice'}
+        title="微软神经语音音色"
+        value={prefs.systemVoiceId || DEFAULT_EDGE_VOICE_ID}
+        options={edgeVoiceOptions}
+        searchPlaceholder="搜索音色、方言…"
+        emptyLabel="没有匹配的音色"
+        onCancel={() => setPicker(null)}
+        onChange={(voiceId) => {
+          onChange({ ...prefs, systemVoiceId: voiceId })
+          setPicker(null)
+        }}
+      />
 
       <OptionPickerDialog
         open={picker === 'system-voice'}

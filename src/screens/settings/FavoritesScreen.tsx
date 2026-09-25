@@ -1,7 +1,9 @@
-import { X, Heart } from 'lucide-react'
+import { useState } from 'react'
+import { X, Heart, Download, Loader2, Check } from 'lucide-react'
 
 import { SettingsShell } from '../../components/SettingsShell'
 import { articleRelativeTime } from '../../lib/time'
+import { exportFavoritesAsMarkdown } from '../../lib/favoritesExport'
 import type { Article } from '../../lib/types'
 
 interface Props {
@@ -12,10 +14,50 @@ interface Props {
 }
 
 export function FavoritesScreen({ favorites, onOpen, onRemoveFavorite, onBack }: Props) {
+  const [exporting, setExporting] = useState(false)
+  const [exported, setExported] = useState(false)
+
+  const handleExport = async () => {
+    if (favorites.length === 0 || exporting) return
+    setExporting(true)
+    setExported(false)
+    try {
+      const res = await exportFavoritesAsMarkdown(favorites)
+      if (res !== 'cancelled') {
+        setExported(true)
+        setTimeout(() => setExported(false), 3000)
+      }
+    } catch (_err) {
+      // 导出失败时不崩溃，静默或打点记录
+    } finally {
+      setExporting(false)
+    }
+  }
+
+  const exportAction = favorites.length > 0 ? (
+    <button
+      type="button"
+      disabled={exporting}
+      onClick={handleExport}
+      title="导出收藏夹为 Markdown"
+      className="inline-flex items-center gap-1.5 rounded-full border border-haze bg-ink-raised px-3 py-1.5 font-mono text-[11px] text-paper-muted transition-colors hover:border-cinnabar/40 hover:text-paper disabled:opacity-50"
+    >
+      {exporting ? (
+        <Loader2 size={13} className="animate-spin text-cinnabar-soft" />
+      ) : exported ? (
+        <Check size={13} className="text-cinnabar-soft" />
+      ) : (
+        <Download size={13} />
+      )}
+      <span>{exported ? '已导出' : exporting ? '导出中…' : '导出 Markdown'}</span>
+    </button>
+  ) : null
+
   return (
     <SettingsShell
       title="我的收藏"
       caption={favorites.length ? `共 ${favorites.length} 篇` : '阅读器顶栏点收藏加入'}
+      action={exportAction}
       onBack={onBack}
     >
       {favorites.length === 0 ? (
