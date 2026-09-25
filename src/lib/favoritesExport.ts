@@ -1,6 +1,6 @@
 import { loadCachedBody } from './bodyCache'
 import {
-  articleToMarkdown,
+  buildArticleMarkdown,
   exportMarkdownFile,
   type MarkdownExportResult,
 } from './articleMarkdown'
@@ -33,7 +33,7 @@ export function buildFavoritesMarkdownArchive(favorites: Article[]): string {
     const cached = loadCachedBody(article.id)
     const html = cached?.html || (article.summary ? `<p>${article.summary}</p>` : '<p>（未缓存正文）</p>')
 
-    const md = articleToMarkdown({
+    const md = buildArticleMarkdown({
       article,
       title: article.title,
       html,

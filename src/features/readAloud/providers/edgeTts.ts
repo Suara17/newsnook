@@ -5,7 +5,7 @@
  * 具备超高自然度与真人语气（晓晓、云希、云扬等）。
  */
 
-import { Capacitor } from '@capacitor/core'
+import { Capacitor, type PluginListenerHandle } from '@capacitor/core'
 import { isNativeReadAloudAvailable, ReadAloudNative } from '../native'
 import type {
   ReadAloudHandle,
@@ -33,13 +33,15 @@ export const EDGE_TTS_VOICES: ReadAloudVoice[] = [
   { id: 'zh-CN-YunxiaNeural', name: '云夏 (少年活力)', lang: 'zh-CN' },
   { id: 'zh-HK-HiuMaanNeural', name: '晓曼 (粤语)', lang: 'zh-HK' },
   { id: 'zh-TW-HsiaoChenNeural', name: '晓臻 (台湾国语)', lang: 'zh-TW' },
-  { id: 'en-US-JennyNeural', name: 'Jenny (美语女声)', lang: 'en-US' },
-  { id: 'en-US-GuyNeural', name: 'Guy (美语男声)', lang: 'en-US' },
+  { id: 'en-US-JennyNeural', name: 'Jenny (自然美语 · 推荐)', lang: 'en-US' },
+  { id: 'en-US-GuyNeural', name: 'Guy (稳重男声)', lang: 'en-US' },
+  { id: 'en-US-AriaNeural', name: 'Aria (生动女声)', lang: 'en-US' },
+  { id: 'en-GB-SoniaNeural', name: 'Sonia (标准英音)', lang: 'en-GB' },
+  { id: 'ja-JP-NanamiNeural', name: '七海 (日语女声)', lang: 'ja-JP' },
+  { id: 'ja-JP-KeitaNeural', name: '圭太 (日语男声)', lang: 'ja-JP' },
 ]
 
-export const DEFAULT_EDGE_VOICE_ID = 'zh-CN-XiaoxiaoNeural'
-
-const EDGE_CAPABILITIES: ReadAloudProviderCapabilities = {
+const EDGE_TTS_CAPABILITIES: ReadAloudProviderCapabilities = {
   voices: true,
   rate: true,
   pitch: true,
@@ -51,67 +53,59 @@ const EDGE_CAPABILITIES: ReadAloudProviderCapabilities = {
   offline: false,
 }
 
-/**
- * 动态计算微软 Sec-MS-GEC 鉴权 token (SHA-256)
- */
-async function generateSecMsGec(): Promise<string> {
-  // Windows file time (100ns 从 1601-01-01 开始，11644473600 秒)
-  const fileTimeSeconds = Date.now() / 1000 + 11644473600
-  let ticks = BigInt(Math.floor(fileTimeSeconds * 10000000))
-  ticks -= ticks % BigInt(3000000000) // 向下舍入至 5 分钟周期
-
-  const strToHash = `${ticks.toString()}${TRUSTED_CLIENT_TOKEN}`
-  const encoder = new TextEncoder()
-  const data = encoder.encode(strToHash)
-
-  // 支持 WebCrypto
-  const hashBuffer = await crypto.subtle.digest('SHA-256', data)
-  const hashArray = Array.from(new Uint8Array(hashBuffer))
-  return hashArray.map((b) => b.toString(16).padStart(2, '0')).join('').toUpperCase()
-}
-
-function generateConnectionId(): string {
-  if (typeof crypto.randomUUID === 'function') {
-    return crypto.randomUUID().replace(/-/g, '')
-  }
-  return 'xxxxxxxxxxxx4xxxyxxxxxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
-    const r = (Math.random() * 16) | 0
-    const v = c === 'x' ? r : (r & 0x3) | 0x8
-    return v.toString(16)
-  })
-}
-
-function escapeXml(str: string): string {
-  const amp = '&' + 'amp;'
-  const lt = '&' + 'lt;'
-  const gt = '&' + 'gt;'
-  const quot = '&' + 'quot;'
-  const apos = '&' + 'apos;'
-  return str
-    .replace(/&/g, amp)
-    .replace(/</g, lt)
-    .replace(/>/g, gt)
-    .replace(/"/g, quot)
-    .replace(/'/g, apos)
-}
+let edgeSequence = 0
 
 function formatRate(rate: number): string {
-  const percent = Math.round((rate - 1) * 100)
+  const percent = Math.round((rate - 1.0) * 100)
   return percent >= 0 ? `+${percent}%` : `${percent}%`
 }
 
 function formatPitch(pitch: number): string {
-  const percent = Math.round((pitch - 1) * 100)
-  return percent >= 0 ? `+${percent}Hz` : `${percent}Hz`
+  const hz = Math.round((pitch - 1.0) * 50)
+  return hz >= 0 ? `+${hz}Hz` : `${hz}Hz`
 }
 
-function buildSsml(text: string, voice: string, rate: number, pitch: number): string {
-  const clean = escapeXml(text)
-  const r = formatRate(rate)
-  const p = formatPitch(pitch)
-  return `<speak version='1.0' xmlns='http://www.w3.org/2001/10/synthesis' xml:lang='en-US'>
-<voice name='${voice}'><prosody pitch='${p}' rate='${r}'>${clean}</prosody></voice>
-</speak>`
+async function computeSecMsGec(): Promise<string> {
+  const WIN_EPOCH = 116444736000000000n
+  const unixNow = BigInt(Date.now())
+  const fileTime = ((unixNow * 10000n + WIN_EPOCH) / 100000000n) * 100000000n
+  const strToHash = `${fileTime}${TRUSTED_CLIENT_TOKEN}`
+
+  const encoder = new TextEncoder()
+  const data = encoder.encode(strToHash)
+  const hashBuf = await crypto.subtle.digest('SHA-256', data)
+  const hashArr = Array.from(new Uint8Array(hashBuf))
+  return hashArr.map((b) => b.toString(16).padStart(2, '0')).join('').toUpperCase()
+}
+
+function escapeSsml(text: string): string {
+  const map: Record<string, string> = {
+    '&': '&amp;',
+    '<': '&lt;',
+    '>': '&gt;',
+    '"': '&quot;',
+    "'": '&apos;',
+  }
+  return text.replace(/[&<>"']/g, (m) => map[m] || m)
+}
+
+function buildSsml(
+  text: string,
+  voice: string,
+  rate: number,
+  pitch: number,
+): string {
+  const rateStr = formatRate(rate)
+  const pitchStr = formatPitch(pitch)
+  return (
+    `<speak version='1.0' xmlns='http://www.w3.org/2001/10/synthesis' xml:lang='en-US'>` +
+    `<voice name='${voice}'>` +
+    `<prosody pitch='${pitchStr}' rate='${rateStr}' volume='+0%'>` +
+    `${escapeSsml(text)}` +
+    `</prosody>` +
+    `</voice>` +
+    `</speak>`
+  )
 }
 
 async function requestEdgeSpeechAudio(
@@ -120,12 +114,11 @@ async function requestEdgeSpeechAudio(
   rate: number,
   pitch: number,
   signal?: AbortSignal,
-): Promise<Blob> {
-  const secMsGec = await generateSecMsGec()
-  const connectionId = generateConnectionId()
-  const url = `${WSS_URL}&ConnectionId=${connectionId}&Sec-MS-GEC=${secMsGec}&Sec-MS-GEC-Version=${SEC_MS_GEC_VERSION}`
+): Promise<{ blob: Blob; mimeType: string; nativeBase64?: string }> {
+  const secMsGec = await computeSecMsGec()
+  const url = `${WSS_URL}&Sec-MS-GEC=${secMsGec}&Sec-MS-GEC-Version=${SEC_MS_GEC_VERSION}&ConnectionId=${crypto.randomUUID().replace(/-/g, '')}`
 
-  return new Promise<Blob>((resolve, reject) => {
+  return new Promise((resolve, reject) => {
     if (signal?.aborted) {
       reject(new DOMException('朗读已取消', 'AbortError'))
       return
@@ -134,11 +127,10 @@ async function requestEdgeSpeechAudio(
     const ws = new WebSocket(url)
     ws.binaryType = 'arraybuffer'
 
-    const audioBuffers: ArrayBuffer[] = []
-    let closed = false
+    const audioChunks: Uint8Array[] = []
+    let hasEnded = false
 
     const cleanup = () => {
-      closed = true
       signal?.removeEventListener('abort', onAbort)
       try {
         if (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING) {
@@ -154,13 +146,16 @@ async function requestEdgeSpeechAudio(
       reject(new DOMException('朗读已取消', 'AbortError'))
     }
 
-    signal?.addEventListener('abort', onAbort)
+    signal?.addEventListener('abort', onAbort, { once: true })
 
     ws.onopen = () => {
-      if (closed) return
-      // 发送 speech.config
       const timestamp = new Date().toISOString()
-      const configMsg = `X-Timestamp:${timestamp}\r\nContent-Type:application/json; charset=utf-8\r\nPath:speech.config\r\n\r\n` +
+      const reqId = crypto.randomUUID().replace(/-/g, '')
+
+      const configMsg =
+        `X-Timestamp:${timestamp}\r\n` +
+        `Content-Type:application/json; charset=utf-8\r\n` +
+        `Path:speech.config\r\n\r\n` +
         JSON.stringify({
           context: {
             synthesis: {
@@ -174,80 +169,95 @@ async function requestEdgeSpeechAudio(
             },
           },
         })
+
       ws.send(configMsg)
 
-      // 发送 ssml
-      const requestId = generateConnectionId()
       const ssml = buildSsml(text, voice, rate, pitch)
-      const ssmlMsg = `X-RequestId:${requestId}\r\nContent-Type:application/ssml+xml\r\nX-Timestamp:${timestamp}\r\nPath:ssml\r\n\r\n${ssml}`
+      const ssmlMsg =
+        `X-RequestId:${reqId}\r\n` +
+        `Content-Type:application/ssml+xml\r\n` +
+        `X-Timestamp:${timestamp}Z\r\n` +
+        `Path:ssml\r\n\r\n` +
+        ssml
+
       ws.send(ssmlMsg)
     }
 
     ws.onmessage = (event) => {
-      if (closed) return
       if (typeof event.data === 'string') {
         if (event.data.includes('Path:turn.end')) {
+          hasEnded = true
           cleanup()
-          if (audioBuffers.length === 0) {
-            reject(new Error('未接收到音频数据'))
-            return
+          const totalLength = audioChunks.reduce((acc, cur) => acc + cur.length, 0)
+          const merged = new Uint8Array(totalLength)
+          let offset = 0
+          for (const chunk of audioChunks) {
+            merged.set(chunk, offset)
+            offset += chunk.length
           }
-          const blob = new Blob(audioBuffers, { type: 'audio/mpeg' })
-          resolve(blob)
+
+          let binary = ''
+          const len = merged.byteLength
+          for (let i = 0; i < len; i++) {
+            binary += String.fromCharCode(merged[i])
+          }
+          const nativeBase64 = btoa(binary)
+
+          const blob = new Blob([merged.buffer], { type: 'audio/mp3' })
+          resolve({ blob, mimeType: 'audio/mp3', nativeBase64 })
         }
       } else if (event.data instanceof ArrayBuffer) {
         const buffer = event.data
+        const view = new DataView(buffer)
         if (buffer.byteLength >= 2) {
-          const view = new DataView(buffer)
-          const headerLength = view.getUint16(0)
+          const headerLength = view.getInt16(0)
           if (buffer.byteLength > headerLength + 2) {
-            const headerBytes = new Uint8Array(buffer, 2, headerLength)
-            const headerStr = new TextDecoder('utf-8').decode(headerBytes)
-            if (headerStr.includes('Path:audio')) {
-              const audioPayload = buffer.slice(headerLength + 2)
-              audioBuffers.push(audioPayload)
-            }
+            const audioData = new Uint8Array(buffer, headerLength + 2)
+            audioChunks.push(audioData)
           }
         }
       }
     }
 
-    ws.onerror = () => {
+    ws.onerror = (err) => {
       cleanup()
-      reject(new Error('Edge TTS 连接异常，请检查网络'))
+      reject(new Error(`Edge TTS WebSocket 连接异常: ${JSON.stringify(err)}`))
     }
 
     ws.onclose = () => {
-      if (!closed) {
+      if (!hasEnded && audioChunks.length === 0) {
         cleanup()
-        if (audioBuffers.length > 0) {
-          resolve(new Blob(audioBuffers, { type: 'audio/mpeg' }))
-        } else {
-          reject(new Error('Edge TTS 连接已中断'))
+        reject(new Error('Edge TTS 连接意外关闭，未能收到音频数据'))
+      } else if (!hasEnded && audioChunks.length > 0) {
+        hasEnded = true
+        cleanup()
+        const totalLength = audioChunks.reduce((acc, cur) => acc + cur.length, 0)
+        const merged = new Uint8Array(totalLength)
+        let offset = 0
+        for (const chunk of audioChunks) {
+          merged.set(chunk, offset)
+          offset += chunk.length
         }
+        let binary = ''
+        const len = merged.byteLength
+        for (let i = 0; i < len; i++) {
+          binary += String.fromCharCode(merged[i])
+        }
+        const nativeBase64 = btoa(binary)
+        const blob = new Blob([merged.buffer], { type: 'audio/mp3' })
+        resolve({ blob, mimeType: 'audio/mp3', nativeBase64 })
       }
     }
   })
 }
 
-async function blobToBase64(blob: Blob): Promise<string> {
-  const buffer = await blob.arrayBuffer()
-  const bytes = new Uint8Array(buffer)
-  let binary = ''
-  const len = bytes.byteLength
-  for (let i = 0; i < len; i += 8192) {
-    binary += String.fromCharCode(...bytes.subarray(i, Math.min(i + 8192, len)))
-  }
-  return btoa(binary)
-}
-
 export class EdgeTtsProvider implements ReadAloudProvider {
   readonly id = 'edge' as const
-  readonly capabilities = EDGE_CAPABILITIES
+  readonly label = '微软 Edge 在线语音'
+  readonly capabilities = EDGE_TTS_CAPABILITIES
 
   private activeAudio: HTMLAudioElement | null = null
   private activeObjectUrl: string | null = null
-  private activeNativeId: string | null = null
   private aborted = false
 
   async isAvailable(): Promise<boolean> {
@@ -260,14 +270,13 @@ export class EdgeTtsProvider implements ReadAloudProvider {
 
   async speak(
     segment: ReadAloudSegment,
-    options: ReadAloudSpeakOptions,
     events: ReadAloudSpeakEvents,
+    options: ReadAloudSpeakOptions,
   ): Promise<ReadAloudHandle> {
     this.aborted = false
-    const voiceId = options.voiceId || DEFAULT_EDGE_VOICE_ID
+    const voiceId = options.voiceId || 'zh-CN-XiaoxiaoNeural'
 
-    // 1. 获取 MP3 Blob
-    const blob = await requestEdgeSpeechAudio(
+    const payload = await requestEdgeSpeechAudio(
       segment.text,
       voiceId,
       options.rate,
@@ -279,38 +288,76 @@ export class EdgeTtsProvider implements ReadAloudProvider {
       throw new DOMException('朗读已取消', 'AbortError')
     }
 
-    // 2. 播放逻辑：原生 Native 桥或 Web Audio
-    if (Capacitor.isNativePlatform() && isNativeReadAloudAvailable()) {
-      const base64 = await blobToBase64(blob)
-      const nativeId = `edge_${Date.now()}`
-      this.activeNativeId = nativeId
+    // 1. 原生平台：使用 ReadAloudNative.playAudio
+    if (Capacitor.isNativePlatform() && isNativeReadAloudAvailable() && payload.nativeBase64) {
+      const utteranceId = `newsnook-edge-${Date.now()}-${++edgeSequence}`
+      let stopped = false
+      let listener: PluginListenerHandle | null = null
 
-      events.onStart?.()
+      const cleanup = async () => {
+        options.signal?.removeEventListener('abort', abort)
+        const current = listener
+        listener = null
+        if (current) await current.remove()
+      }
 
-      await ReadAloudNative.speakAudioBase64({
-        id: nativeId,
-        base64,
-        format: 'mp3',
-      })
+      const abort = () => {
+        stopped = true
+        void ReadAloudNative.stop()
+        void cleanup()
+      }
+
+      listener = await ReadAloudNative.addListener(
+        'readAloudEvent',
+        (event) => {
+          if (event.utteranceId !== utteranceId) return
+          if (event.type === 'started') events.onStart?.()
+          if (event.type === 'ended' && !stopped) {
+            events.onEnd?.()
+            void cleanup()
+          }
+          if (event.type === 'error' && !stopped) {
+            events.onError?.(
+              new Error(event.message || 'Android Edge TTS 音频播放失败'),
+            )
+            void cleanup()
+          }
+        },
+      )
+
+      options.signal?.addEventListener('abort', abort, { once: true })
+
+      try {
+        await ReadAloudNative.playAudio({
+          utteranceId,
+          base64: payload.nativeBase64,
+          mimeType: payload.mimeType,
+        })
+        if (options.signal?.aborted) {
+          stopped = true
+          await ReadAloudNative.stop().catch(() => {})
+          await cleanup()
+          throw new DOMException('朗读已取消', 'AbortError')
+        }
+      } catch (error) {
+        await cleanup()
+        throw error
+      }
 
       return {
-        pause: async () => {
-          await ReadAloudNative.pauseAudio({ id: nativeId })
-        },
-        resume: async () => {
-          await ReadAloudNative.resumeAudio({ id: nativeId })
-        },
+        pause: () => ReadAloudNative.pause(),
+        resume: () => ReadAloudNative.resume(),
         stop: async () => {
-          await ReadAloudNative.stopAudio({ id: nativeId })
+          stopped = true
+          await ReadAloudNative.stop()
+          await cleanup()
         },
-        dispose: async () => {
-          await ReadAloudNative.stopAudio({ id: nativeId })
-        },
+        dispose: cleanup,
       }
     }
 
-    // 3. Web 端使用 HTMLAudioElement 播放
-    const objectUrl = URL.createObjectURL(blob)
+    // 2. Web 端使用 HTMLAudioElement 播放
+    const objectUrl = URL.createObjectURL(payload.blob)
     this.activeObjectUrl = objectUrl
     const audio = new Audio(objectUrl)
     this.activeAudio = audio
@@ -330,16 +377,13 @@ export class EdgeTtsProvider implements ReadAloudProvider {
       audio.onplay = () => {
         events.onStart?.()
       }
-
       audio.ontimeupdate = () => {
         events.onTime?.(Math.round(audio.currentTime * 1000))
       }
-
       audio.onended = () => {
         cleanup()
         events.onEnd?.()
       }
-
       audio.onerror = () => {
         cleanup()
         const err = new Error('音频解码播放失败')
@@ -378,14 +422,6 @@ export class EdgeTtsProvider implements ReadAloudProvider {
     if (this.activeObjectUrl) {
       URL.revokeObjectURL(this.activeObjectUrl)
       this.activeObjectUrl = null
-    }
-    if (this.activeNativeId) {
-      try {
-        await ReadAloudNative.stopAudio({ id: this.activeNativeId })
-      } catch {
-        // ignore
-      }
-      this.activeNativeId = null
     }
   }
 }
