@@ -41,6 +41,8 @@ export const EDGE_TTS_VOICES: ReadAloudVoice[] = [
   { id: 'ja-JP-KeitaNeural', name: '圭太 (日语男声)', lang: 'ja-JP' },
 ]
 
+export const DEFAULT_EDGE_VOICE_ID = 'zh-CN-XiaoxiaoNeural'
+
 const EDGE_TTS_CAPABILITIES: ReadAloudProviderCapabilities = {
   voices: true,
   rate: true,
@@ -270,8 +272,8 @@ export class EdgeTtsProvider implements ReadAloudProvider {
 
   async speak(
     segment: ReadAloudSegment,
-    events: ReadAloudSpeakEvents,
     options: ReadAloudSpeakOptions,
+    events: ReadAloudSpeakEvents,
   ): Promise<ReadAloudHandle> {
     this.aborted = false
     const voiceId = options.voiceId || 'zh-CN-XiaoxiaoNeural'
